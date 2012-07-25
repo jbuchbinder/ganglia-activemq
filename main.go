@@ -21,7 +21,7 @@ var (
 	activeMqHost    = flag.String("activeMqHost", "localhost", "ActiveMQ host")
 	activeMqPort    = flag.Int("activeMqPort", 8161, "ActiveMQ port")
 	gangliaHost     = flag.String("gangliaHost", "localhost", "Ganglia host name/IP")
-	gangliaPort     = flag.Int("gangliaPort", 8469, "Ganglia port")
+	gangliaPort     = flag.Int("gangliaPort", 8649, "Ganglia port")
 	gangliaSpoof    = flag.String("gangliaSpoof", "", "Ganglia spoof string (IP:host)")
 	gangliaGroup    = flag.String("gangliaGroup", "activemq", "Ganglia group name")
 	gangliaInterval = flag.Int("gangliaInterval", 300, "Ganglia polling interval/metric TTL")
@@ -53,12 +53,13 @@ func main() {
 	}
 	for i := 0; i < len(q.Items); i++ {
 		if *ignoreQueues == "" || !strings.Contains(q.Items[i].Name, *ignoreQueues) {
+			sName := strings.Replace(q.Items[i].Name, ".", "_", -1)
 			log.Debug("Processing queue " + q.Items[i].Name)
 			if *verbose {
-				fmt.Printf("Sending queue_%s_size\n", q.Items[i].Name)
+				fmt.Printf("Sending queue_%s_size\n", sName)
 			}
 			gm.SendMetric(
-				fmt.Sprintf("queue_%s_size", q.Items[i].Name),
+				fmt.Sprintf("queue_%s_size", sName),
 				fmt.Sprint(q.Items[i].Stats.Size),
 				gmetric.VALUE_UNSIGNED_INT, "size", gmetric.SLOPE_BOTH,
 				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
@@ -67,7 +68,7 @@ func main() {
 				fmt.Printf("Sending queue_%s_consumers\n", q.Items[i].Name)
 			}
 			gm.SendMetric(
-				fmt.Sprintf("queue_%s_consumers", q.Items[i].Name),
+				fmt.Sprintf("queue_%s_consumers", sName),
 				fmt.Sprint(q.Items[i].Stats.ConsumerCount),
 				gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
 				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
