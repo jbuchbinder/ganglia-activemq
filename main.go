@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/jbuchbinder/go-gmetric/gmetric"
 	"io/ioutil"
+	"log/syslog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -26,24 +27,24 @@ var (
 	gangliaInterval = flag.Int("gangliaInterval", 300, "Ganglia polling interval/metric TTL")
 	verbose         = flag.Bool("verbose", false, "Verbose")
 	ignoreQueues    = flag.String("ignoreQueues", "", "Substring to ignore in queue names")
+	gm              gmetric.Gmetric
+	log, _          = syslog.New(syslog.LOG_DEBUG, "ganglia-activemq")
 )
 
 func main() {
+	gm.SetLogger(log)
+	gm.SetVerbose(false)
 	flag.Parse()
 
 	// Lookup host name
-	gAddrs, err := net.LookupIP(*gangliaHost)
+	gIP, err := net.ResolveIPAddr("ip4", *gangliaHost)
 	if err != nil {
 		panic(err.Error())
 	}
-	if len(gAddrs) < 1 {
-		panic("Could not look up address " + *gangliaHost)
-	}
 
-	gm := gmetric.Gmetric{gAddrs[0], *gangliaPort, *gangliaHost, *gangliaSpoof}
-	gm.SetVerbose(true)
+	gm = gmetric.Gmetric{gIP.IP, *gangliaPort, *gangliaSpoof, *gangliaSpoof}
 	if *verbose {
-		fmt.Printf("Established gmetric connection to %s\n", gAddrs[0])
+		fmt.Printf("Established gmetric connection to %s:%d\n", gIP.IP, *gangliaPort)
 	}
 
 	q, err := GetQueues(*activeMqHost, *activeMqPort)
@@ -52,25 +53,25 @@ func main() {
 	}
 	for i := 0; i < len(q.Items); i++ {
 		if *ignoreQueues == "" || !strings.Contains(q.Items[i].Name, *ignoreQueues) {
-			fmt.Println(q.Items[i].Name)
+			log.Debug("Processing queue " + q.Items[i].Name)
 			if *verbose {
-        fmt.Printf("Sending queue_%s_size\n", q.Items[i].Name)
-      }
-			go gm.SendMetric(
+				fmt.Printf("Sending queue_%s_size\n", q.Items[i].Name)
+			}
+			gm.SendMetric(
 				fmt.Sprintf("queue_%s_size", q.Items[i].Name),
 				fmt.Sprint(q.Items[i].Stats.Size),
-        gmetric.VALUE_UNSIGNED_INT, "size", gmetric.SLOPE_BOTH,
-				uint32(*gangliaInterval), uint32(*gangliaInterval),
-        *gangliaGroup)
+				gmetric.VALUE_UNSIGNED_INT, "size", gmetric.SLOPE_BOTH,
+				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
+				*gangliaGroup)
 			if *verbose {
-        fmt.Printf("Sending queue_%s_consumers\n", q.Items[i].Name)
-      }
-			go gm.SendMetric(
+				fmt.Printf("Sending queue_%s_consumers\n", q.Items[i].Name)
+			}
+			gm.SendMetric(
 				fmt.Sprintf("queue_%s_consumers", q.Items[i].Name),
 				fmt.Sprint(q.Items[i].Stats.ConsumerCount),
-        gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
-				uint32(*gangliaInterval), uint32(*gangliaInterval),
-        *gangliaGroup)
+				gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
+				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
+				*gangliaGroup)
 		}
 	}
 }
