@@ -2,7 +2,7 @@ GANGLIA-ACTIVEMQ
 ================
 
  * Github: https://github.com/jbuchbinder/ganglia-activemq
- * Twitter: https://twitter.com/jbuchbinder
+ * Twitter: [@jbuchbinder](https://twitter.com/jbuchbinder)
 
 Allows ActiveMQ monitoring stats to be pulled into Ganglia.
 
