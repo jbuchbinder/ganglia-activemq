@@ -4,7 +4,8 @@ GANGLIA-ACTIVEMQ
  * Github: https://github.com/jbuchbinder/ganglia-activemq
  * Twitter: [@jbuchbinder](https://twitter.com/jbuchbinder)
 
-Allows ActiveMQ monitoring stats to be pulled into Ganglia.
+Allows ActiveMQ monitoring stats to be pulled into Ganglia. It can optionally
+use [VDED](https://github.com/jbuchbinder/vded) to aggregate certain counters.
 
 BUILDING
 --------
@@ -23,11 +24,12 @@ Usage of ganglia-activemq:
   -activeMqHost="localhost": ActiveMQ host
   -activeMqPort=8161: ActiveMQ port
   -gangliaGroup="activemq": Ganglia group name
-  -gangliaHost="localhost": Ganglia host name/IP
+  -gangliaHost="localhost": Ganglia host name/IP, can be multiple comma separated
   -gangliaInterval=300: Ganglia polling interval/metric TTL
-  -gangliaPort=8469: Ganglia port
+  -gangliaPort=8649: Ganglia port
   -gangliaSpoof="": Ganglia spoof string (IP:host)
   -ignoreQueues="": Substring to ignore in queue names
+  -vdedServer="": VDED server (default not used)
   -verbose=false: Verbose
 ```
 

@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/jbuchbinder/go-gmetric/gmetric"
@@ -14,7 +15,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"os"
 	"strings"
+	"time"
 )
 
 var (
@@ -25,6 +28,7 @@ var (
 	gangliaSpoof    = flag.String("gangliaSpoof", "", "Ganglia spoof string (IP:host)")
 	gangliaGroup    = flag.String("gangliaGroup", "activemq", "Ganglia group name")
 	gangliaInterval = flag.Int("gangliaInterval", 300, "Ganglia polling interval/metric TTL")
+	vdedServer      = flag.String("vdedServer", "", "VDED server (default not used)")
 	verbose         = flag.Bool("verbose", false, "Verbose")
 	ignoreQueues    = flag.String("ignoreQueues", "", "Substring to ignore in queue names")
 	gm              []gmetric.Gmetric
@@ -70,6 +74,11 @@ func main() {
 		}
 	}
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+
 	q, err := GetQueues(*activeMqHost, *activeMqPort)
 	if err != nil {
 		panic(err)
@@ -97,6 +106,16 @@ func main() {
 					gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
 					uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
 					*gangliaGroup)
+			}
+			if *vdedServer != "" {
+				if *verbose {
+					fmt.Printf("VDED submitting %s queue_%s_enqueue : %d\n", hostname, sName, q.Items[i].Stats.EnqueueCount)
+				}
+				go SubmitVded(hostname, fmt.Sprintf("queue_%s_enqueue", sName), q.Items[i].Stats.EnqueueCount)
+				if *verbose {
+					fmt.Printf("VDED submitting %s queue_%s_dequeue : %d\n", hostname, sName, q.Items[i].Stats.DequeueCount)
+				}
+				go SubmitVded(hostname, fmt.Sprintf("queue_%s_dequeue", sName), q.Items[i].Stats.DequeueCount)
 			}
 		}
 	}
@@ -150,4 +169,43 @@ func GetQueues(host string, port int) (q Queues, e error) {
 
 	q = obj
 	return
+}
+
+func SubmitVded(host string, metricName string, value int64) (e error) {
+	if *vdedServer == "" {
+		return errors.New("No VDED server, cannot continue")
+	}
+
+	url := fmt.Sprintf("http://%s:48333/vector?host=%s&vector=delta_%s&value=%d&ts=%d&submit_metric=1", *vdedServer, metricName, value, time.Now().Unix())
+	log.Debug("VDED: " + url)
+
+	c := http.Client{
+		Transport: &http.Transport{
+			Dial: TimeoutDialer(time.Duration(5) * time.Second),
+		},
+	}
+
+	resp, err := c.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	log.Debug("VDED returned: " + string(body))
+
+	return
+}
+
+func TimeoutDialer(ns time.Duration) func(net, addr string) (c net.Conn, err error) {
+	return func(netw, addr string) (net.Conn, error) {
+		c, err := net.Dial(netw, addr)
+		if err != nil {
+			return nil, err
+		}
+		c.SetDeadline(time.Now().Add(ns))
+		return c, nil
+	}
 }
