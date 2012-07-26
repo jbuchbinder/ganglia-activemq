@@ -20,31 +20,54 @@ import (
 var (
 	activeMqHost    = flag.String("activeMqHost", "localhost", "ActiveMQ host")
 	activeMqPort    = flag.Int("activeMqPort", 8161, "ActiveMQ port")
-	gangliaHost     = flag.String("gangliaHost", "localhost", "Ganglia host name/IP")
+	gangliaHost     = flag.String("gangliaHost", "localhost", "Ganglia host name/IP, can be multiple comma separated")
 	gangliaPort     = flag.Int("gangliaPort", 8649, "Ganglia port")
 	gangliaSpoof    = flag.String("gangliaSpoof", "", "Ganglia spoof string (IP:host)")
 	gangliaGroup    = flag.String("gangliaGroup", "activemq", "Ganglia group name")
 	gangliaInterval = flag.Int("gangliaInterval", 300, "Ganglia polling interval/metric TTL")
 	verbose         = flag.Bool("verbose", false, "Verbose")
 	ignoreQueues    = flag.String("ignoreQueues", "", "Substring to ignore in queue names")
-	gm              gmetric.Gmetric
+	gm              []gmetric.Gmetric
 	log, _          = syslog.New(syslog.LOG_DEBUG, "ganglia-activemq")
 )
 
 func main() {
-	gm.SetLogger(log)
-	gm.SetVerbose(false)
 	flag.Parse()
 
-	// Lookup host name
-	gIP, err := net.ResolveIPAddr("ip4", *gangliaHost)
-	if err != nil {
-		panic(err.Error())
+	var gIPs []net.IPAddr
+
+	if strings.Contains(*gangliaHost, ",") {
+		gIPs = make([]net.IPAddr, strings.Count(*gangliaHost, ",")+1)
+		gm = make([]gmetric.Gmetric, strings.Count(*gangliaHost, ",")+1)
+		segs := strings.Split(*gangliaHost, ",")
+		for i := 0; i < len(segs); i++ {
+			gIP, err := net.ResolveIPAddr("ip4", segs[i])
+			if err != nil {
+				panic(err.Error())
+			}
+			gIPs[i] = *gIP
+		}
+	} else {
+		gIPs = make([]net.IPAddr, 1)
+		gm = make([]gmetric.Gmetric, 1)
+		// Lookup host name
+		gIP, err := net.ResolveIPAddr("ip4", *gangliaHost)
+		if err != nil {
+			panic(err.Error())
+		}
+		gIPs[0] = *gIP
 	}
 
-	gm = gmetric.Gmetric{gIP.IP, *gangliaPort, *gangliaSpoof, *gangliaSpoof}
-	if *verbose {
-		fmt.Printf("Established gmetric connection to %s:%d\n", gIP.IP, *gangliaPort)
+	fmt.Printf("len(gIPs) = %d\n", len(gIPs))
+	for i := 0; i < len(gIPs); i++ {
+		gm[i] = gmetric.Gmetric{gIPs[i].IP, *gangliaPort, *gangliaSpoof, *gangliaSpoof}
+		gm[i].SetLogger(log)
+		if *verbose {
+			gm[i].SetVerbose(true)
+			fmt.Printf("Established gmetric connection to %s:%d\n", gIPs[i].IP, *gangliaPort)
+		} else {
+			gm[i].SetVerbose(false)
+		}
 	}
 
 	q, err := GetQueues(*activeMqHost, *activeMqPort)
@@ -55,24 +78,26 @@ func main() {
 		if *ignoreQueues == "" || !strings.Contains(q.Items[i].Name, *ignoreQueues) {
 			sName := strings.Replace(q.Items[i].Name, ".", "_", -1)
 			log.Debug("Processing queue " + q.Items[i].Name)
-			if *verbose {
-				fmt.Printf("Sending queue_%s_size\n", sName)
+			for j := 0; j < len(gm); j++ {
+				if *verbose {
+					fmt.Printf("Sending queue_%s_size to %s\n", q.Items[i].Name, gIPs[j].IP)
+				}
+				gm[j].SendMetric(
+					fmt.Sprintf("queue_%s_size", sName),
+					fmt.Sprint(q.Items[i].Stats.Size),
+					gmetric.VALUE_UNSIGNED_INT, "size", gmetric.SLOPE_BOTH,
+					uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
+					*gangliaGroup)
+				if *verbose {
+					fmt.Printf("Sending queue_%s_consumers to %s\n", q.Items[i].Name, gIPs[j].IP)
+				}
+				gm[j].SendMetric(
+					fmt.Sprintf("queue_%s_consumers", sName),
+					fmt.Sprint(q.Items[i].Stats.ConsumerCount),
+					gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
+					uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
+					*gangliaGroup)
 			}
-			gm.SendMetric(
-				fmt.Sprintf("queue_%s_size", sName),
-				fmt.Sprint(q.Items[i].Stats.Size),
-				gmetric.VALUE_UNSIGNED_INT, "size", gmetric.SLOPE_BOTH,
-				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
-				*gangliaGroup)
-			if *verbose {
-				fmt.Printf("Sending queue_%s_consumers\n", q.Items[i].Name)
-			}
-			gm.SendMetric(
-				fmt.Sprintf("queue_%s_consumers", sName),
-				fmt.Sprint(q.Items[i].Stats.ConsumerCount),
-				gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
-				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
-				*gangliaGroup)
 		}
 	}
 }
