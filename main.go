@@ -62,7 +62,6 @@ func main() {
 		gIPs[0] = *gIP
 	}
 
-	fmt.Printf("len(gIPs) = %d\n", len(gIPs))
 	for i := 0; i < len(gIPs); i++ {
 		gm[i] = gmetric.Gmetric{gIPs[i].IP, *gangliaPort, *gangliaSpoof, *gangliaSpoof}
 		gm[i].SetLogger(log)
@@ -176,7 +175,7 @@ func SubmitVded(host string, metricName string, value int64) (e error) {
 		return errors.New("No VDED server, cannot continue")
 	}
 
-	url := fmt.Sprintf("http://%s:48333/vector?host=%s&vector=delta_%s&value=%d&ts=%d&submit_metric=1", *vdedServer, metricName, value, time.Now().Unix())
+	url := fmt.Sprintf("http://%s:48333/vector?host=%s&vector=delta_%s&value=%d&ts=%d&submit_metric=1", *vdedServer, host, metricName, value, time.Now().Unix())
 	log.Debug("VDED: " + url)
 
 	c := http.Client{
