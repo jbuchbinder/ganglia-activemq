@@ -31,46 +31,46 @@ var (
 	vdedServer      = flag.String("vdedServer", "", "VDED server (default not used)")
 	verbose         = flag.Bool("verbose", false, "Verbose")
 	ignoreQueues    = flag.String("ignoreQueues", "", "Substring to ignore in queue names")
-	gm              []gmetric.Gmetric
+	gm              gmetric.Gmetric
 	log, _          = syslog.New(syslog.LOG_DEBUG, "ganglia-activemq")
 )
 
 func main() {
 	flag.Parse()
 
-	var gIPs []net.IPAddr
+	gm = gmetric.Gmetric{
+		Spoof: *gangliaSpoof,
+		Host:  *gangliaSpoof,
+	}
+	gm.SetLogger(log)
+	if *verbose {
+		gm.SetVerbose(true)
+	} else {
+		gm.SetVerbose(false)
+	}
 
 	if strings.Contains(*gangliaHost, ",") {
-		gIPs = make([]net.IPAddr, strings.Count(*gangliaHost, ",")+1)
-		gm = make([]gmetric.Gmetric, strings.Count(*gangliaHost, ",")+1)
 		segs := strings.Split(*gangliaHost, ",")
 		for i := 0; i < len(segs); i++ {
 			gIP, err := net.ResolveIPAddr("ip4", segs[i])
 			if err != nil {
 				panic(err.Error())
 			}
-			gIPs[i] = *gIP
+			gm.AddServer(gmetric.GmetricServer{
+				Server: gIP.IP,
+				Port:   *gangliaPort,
+			})
 		}
 	} else {
-		gIPs = make([]net.IPAddr, 1)
-		gm = make([]gmetric.Gmetric, 1)
 		// Lookup host name
 		gIP, err := net.ResolveIPAddr("ip4", *gangliaHost)
 		if err != nil {
 			panic(err.Error())
 		}
-		gIPs[0] = *gIP
-	}
-
-	for i := 0; i < len(gIPs); i++ {
-		gm[i] = gmetric.Gmetric{gIPs[i].IP, *gangliaPort, *gangliaSpoof, *gangliaSpoof}
-		gm[i].SetLogger(log)
-		if *verbose {
-			gm[i].SetVerbose(true)
-			fmt.Printf("Established gmetric connection to %s:%d\n", gIPs[i].IP, *gangliaPort)
-		} else {
-			gm[i].SetVerbose(false)
-		}
+		gm.AddServer(gmetric.GmetricServer{
+			Server: gIP.IP,
+			Port:   *gangliaPort,
+		})
 	}
 
 	hostname, err := os.Hostname()
@@ -86,26 +86,24 @@ func main() {
 		if *ignoreQueues == "" || !strings.Contains(q.Items[i].Name, *ignoreQueues) {
 			sName := strings.Replace(q.Items[i].Name, ".", "_", -1)
 			log.Debug("Processing queue " + q.Items[i].Name)
-			for j := 0; j < len(gm); j++ {
-				if *verbose {
-					fmt.Printf("Sending queue_%s_size to %s\n", q.Items[i].Name, gIPs[j].IP)
-				}
-				gm[j].SendMetric(
-					fmt.Sprintf("queue_%s_size", sName),
-					fmt.Sprint(q.Items[i].Stats.Size),
-					gmetric.VALUE_UNSIGNED_INT, "size", gmetric.SLOPE_BOTH,
-					uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
-					*gangliaGroup)
-				if *verbose {
-					fmt.Printf("Sending queue_%s_consumers to %s\n", q.Items[i].Name, gIPs[j].IP)
-				}
-				gm[j].SendMetric(
-					fmt.Sprintf("queue_%s_consumers", sName),
-					fmt.Sprint(q.Items[i].Stats.ConsumerCount),
-					gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
-					uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
-					*gangliaGroup)
+			if *verbose {
+				fmt.Printf("Sending queue_%s_size\n", q.Items[i].Name)
 			}
+			gm.SendMetric(
+				fmt.Sprintf("queue_%s_size", sName),
+				fmt.Sprint(q.Items[i].Stats.Size),
+				gmetric.VALUE_UNSIGNED_INT, "size", gmetric.SLOPE_BOTH,
+				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
+				*gangliaGroup)
+			if *verbose {
+				fmt.Printf("Sending queue_%s_consumers\n", q.Items[i].Name)
+			}
+			gm.SendMetric(
+				fmt.Sprintf("queue_%s_consumers", sName),
+				fmt.Sprint(q.Items[i].Stats.ConsumerCount),
+				gmetric.VALUE_UNSIGNED_INT, "consumers", gmetric.SLOPE_BOTH,
+				uint32(*gangliaInterval), uint32(*gangliaInterval)*2,
+				*gangliaGroup)
 			if *vdedServer != "" {
 				if *verbose {
 					fmt.Printf("VDED submitting %s queue_%s_enqueue : %d\n", hostname, sName, q.Items[i].Stats.EnqueueCount)
