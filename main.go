@@ -78,7 +78,7 @@ func main() {
 		panic(err)
 	}
 
-	q, err := GetQueues(*activeMqHost, *activeMqPort)
+	q, err := getQueues(*activeMqHost, *activeMqPort)
 	if err != nil {
 		panic(err)
 	}
@@ -108,17 +108,17 @@ func main() {
 				if *verbose {
 					fmt.Printf("VDED submitting %s queue_%s_enqueue : %d\n", hostname, sName, q.Items[i].Stats.EnqueueCount)
 				}
-				go SubmitVded(hostname, fmt.Sprintf("queue_%s_enqueue", sName), q.Items[i].Stats.EnqueueCount)
+				go submitVded(hostname, fmt.Sprintf("queue_%s_enqueue", sName), q.Items[i].Stats.EnqueueCount)
 				if *verbose {
 					fmt.Printf("VDED submitting %s queue_%s_dequeue : %d\n", hostname, sName, q.Items[i].Stats.DequeueCount)
 				}
-				go SubmitVded(hostname, fmt.Sprintf("queue_%s_dequeue", sName), q.Items[i].Stats.DequeueCount)
+				go submitVded(hostname, fmt.Sprintf("queue_%s_dequeue", sName), q.Items[i].Stats.DequeueCount)
 			}
 		}
 	}
 }
 
-func GetQueues(host string, port int) (q Queues, e error) {
+func getQueues(host string, port int) (q queues, e error) {
 	client := http.Client{}
 	url := fmt.Sprintf("http://%s:%d/admin/xml/queues.jsp", host, port)
 	if *verbose {
@@ -148,7 +148,7 @@ func GetQueues(host string, port int) (q Queues, e error) {
 		e = err
 		return
 	}
-	var obj Queues
+	var obj queues
 	err = xml.Unmarshal(body, &obj)
 	if err != nil {
 		e = err
@@ -168,7 +168,7 @@ func GetQueues(host string, port int) (q Queues, e error) {
 	return
 }
 
-func SubmitVded(host string, metricName string, value int64) (e error) {
+func submitVded(host string, metricName string, value int64) (e error) {
 	if *vdedServer == "" {
 		return errors.New("No VDED server, cannot continue")
 	}
@@ -178,7 +178,7 @@ func SubmitVded(host string, metricName string, value int64) (e error) {
 
 	c := http.Client{
 		Transport: &http.Transport{
-			Dial: TimeoutDialer(time.Duration(5) * time.Second),
+			Dial: timeoutDialer(time.Duration(5) * time.Second),
 		},
 	}
 
@@ -196,7 +196,7 @@ func SubmitVded(host string, metricName string, value int64) (e error) {
 	return
 }
 
-func TimeoutDialer(ns time.Duration) func(net, addr string) (c net.Conn, err error) {
+func timeoutDialer(ns time.Duration) func(net, addr string) (c net.Conn, err error) {
 	return func(netw, addr string) (net.Conn, error) {
 		c, err := net.Dial(netw, addr)
 		if err != nil {
