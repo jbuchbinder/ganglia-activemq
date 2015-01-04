@@ -1,5 +1,6 @@
-GANGLIA-ACTIVEMQ
-================
+# GANGLIA-ACTIVEMQ
+
+[![Gobuild Download](http://gobuild.io/badge/github.com/jbuchbinder/ganglia-activemq/downloads.svg)](http://gobuild.io/github.com/jbuchbinder/ganglia-activemq)
 
  * Github: https://github.com/jbuchbinder/ganglia-activemq
  * Twitter: [@jbuchbinder](https://twitter.com/jbuchbinder)
@@ -7,8 +8,7 @@ GANGLIA-ACTIVEMQ
 Allows ActiveMQ monitoring stats to be pulled into Ganglia. It can optionally
 use [VDED](https://github.com/jbuchbinder/vded) to aggregate certain counters.
 
-BUILDING
---------
+## BUILDING
 
 ```
 go get github.com/jbuchbinder/go-gmetric/gmetric
@@ -16,8 +16,7 @@ go install github.com/jbuchbinder/go-gmetric/gmetric
 go build
 ```
 
-USAGE
------
+## USAGE
 
 ```
 Usage of ganglia-activemq:
