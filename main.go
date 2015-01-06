@@ -56,7 +56,7 @@ func main() {
 			if err != nil {
 				panic(err.Error())
 			}
-			gm.AddServer(gmetric.GmetricServer{
+			gm.AddServer(gmetric.Server{
 				Server: gIP.IP,
 				Port:   *gangliaPort,
 			})
@@ -67,7 +67,7 @@ func main() {
 		if err != nil {
 			panic(err.Error())
 		}
-		gm.AddServer(gmetric.GmetricServer{
+		gm.AddServer(gmetric.Server{
 			Server: gIP.IP,
 			Port:   *gangliaPort,
 		})
